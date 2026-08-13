@@ -1,5 +1,6 @@
 /*
-  Robô 2WD com ESP32 + TB6612FNG
+  Robô 2WD com ESP32 + TB6612FNG + HC-SR04
+
   Controle:
     1) Celular via Wi-Fi: conecte-se à rede "Robo-ESP32" e abra http://192.168.4.1
     2) Wokwi / Serial Monitor:
@@ -11,7 +12,12 @@
        + = aumenta velocidade
        - = diminui velocidade
 
-  Baseado no exemplo de Wi-Fi Scan do ESP32.
+  Segurança por ultrassom:
+    - Se o HC-SR04 detectar obstáculo a 20 cm ou menos, o robô para.
+    - Enquanto houver obstáculo à frente, somente RÉ (B) e STOP (S) são aceitos.
+    - O bloqueio é liberado quando a distância volta a 25 cm ou mais.
+
+  Baseado no exemplo de Wi-Fi Scan do ESP32 fornecido para o projeto.
 */
 
 #include <Arduino.h>
@@ -47,6 +53,20 @@ const uint8_t PWMB_PIN = 14;
 const uint8_t STBY_PIN = 13;
 
 // ============================================================
+// Pinos ESP32 -> HC-SR04
+// ============================================================
+const uint8_t ULTRASONIC_TRIG_PIN = 18;
+const uint8_t ULTRASONIC_ECHO_PIN = 19;
+
+// Distâncias do bloqueio com histerese para evitar liga/desliga rápido.
+const float OBSTACLE_STOP_DISTANCE_CM = 20.0f;
+const float OBSTACLE_RELEASE_DISTANCE_CM = 25.0f;
+
+// O datasheet recomenda intervalo superior a 60 ms entre medições.
+const unsigned long ULTRASONIC_INTERVAL_MS = 80;
+const unsigned long ULTRASONIC_TIMEOUT_US = 30000;
+
+// ============================================================
 // Estado do robô
 // ============================================================
 int motorSpeed = 180;  // 0..255
@@ -54,6 +74,10 @@ char currentCommand = 'S';
 
 const unsigned long COMMAND_TIMEOUT_MS = 900;
 unsigned long lastMotionCommandMs = 0;
+
+float lastDistanceCm = -1.0f;
+bool obstacleDetected = false;
+unsigned long lastUltrasonicReadMs = 0;
 
 // ============================================================
 // Página de controle
@@ -81,7 +105,18 @@ const char INDEX_HTML[] = R"HTML(
       text-align: center;
     }
     h1 { margin: 0 0 8px; }
-    .subtitle { color: #bbb; margin-bottom: 20px; }
+    .subtitle { color: #bbb; margin-bottom: 14px; }
+    .sensor {
+      margin: 12px auto 18px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #1e1e1e;
+      max-width: 330px;
+    }
+    .sensor.alert {
+      background: #6d1515;
+      color: #fff;
+    }
     .pad {
       display: grid;
       grid-template-columns: repeat(3, 92px);
@@ -102,6 +137,11 @@ const char INDEX_HTML[] = R"HTML(
       user-select: none;
     }
     button:active { transform: scale(.96); background: #444; }
+    button:disabled {
+      opacity: .25;
+      cursor: not-allowed;
+      transform: none;
+    }
     .stop { background: #8b1a1a; font-size: 20px; }
     .speed-box {
       background: #1e1e1e;
@@ -121,6 +161,11 @@ const char INDEX_HTML[] = R"HTML(
   <main class="app">
     <h1>Robô 2WD ESP32</h1>
     <div class="subtitle">Controle Wi-Fi</div>
+
+    <div id="sensor" class="sensor">
+      Ultrassom: <strong id="distance">--</strong> cm<br>
+      <span id="sensorMessage">Área frontal livre</span>
+    </div>
 
     <div class="pad">
       <div></div>
@@ -147,19 +192,38 @@ const char INDEX_HTML[] = R"HTML(
 <script>
   let repeatTimer = null;
   let activeDir = 'S';
+  let obstacle = false;
 
   function request(url) {
-    return fetch(url, { cache: 'no-store' }).catch(() => {});
+    return fetch(url, { cache: 'no-store' });
   }
 
   function sendMove(dir) {
     activeDir = dir;
-    request('/move?dir=' + encodeURIComponent(dir));
-    document.getElementById('status').textContent =
-      dir === 'S' ? 'Parado' : 'Comando: ' + dir;
+
+    request('/move?dir=' + encodeURIComponent(dir))
+      .then(async response => {
+        if (!response.ok) {
+          const text = await response.text();
+          document.getElementById('status').textContent = text;
+          return;
+        }
+
+        document.getElementById('status').textContent =
+          dir === 'S' ? 'Parado' : 'Comando: ' + dir;
+      })
+      .catch(() => {
+        document.getElementById('status').textContent = 'Falha de comunicação';
+      });
   }
 
   function startMove(dir) {
+    if (obstacle && dir !== 'B' && dir !== 'S') {
+      document.getElementById('status').textContent =
+        'Obstáculo à frente: somente RÉ está liberada.';
+      return;
+    }
+
     if (repeatTimer) clearInterval(repeatTimer);
     sendMove(dir);
 
@@ -168,13 +232,16 @@ const char INDEX_HTML[] = R"HTML(
     }
   }
 
-  function stopMove() {
+  function stopMove(sendStop = true) {
     if (repeatTimer) {
       clearInterval(repeatTimer);
       repeatTimer = null;
     }
-    if (activeDir !== 'S') {
+
+    if (sendStop && activeDir !== 'S') {
       sendMove('S');
+    } else {
+      activeDir = 'S';
     }
   }
 
@@ -184,7 +251,7 @@ const char INDEX_HTML[] = R"HTML(
     btn.addEventListener('pointerdown', e => {
       e.preventDefault();
       if (dir === 'S') {
-        stopMove();
+        stopMove(false);
         sendMove('S');
       } else {
         startMove(dir);
@@ -196,13 +263,13 @@ const char INDEX_HTML[] = R"HTML(
       if (dir !== 'S') stopMove();
     });
 
-    btn.addEventListener('pointercancel', stopMove);
+    btn.addEventListener('pointercancel', () => stopMove());
     btn.addEventListener('pointerleave', e => {
       if (e.buttons) stopMove();
     });
   });
 
-  window.addEventListener('blur', stopMove);
+  window.addEventListener('blur', () => stopMove());
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopMove();
   });
@@ -215,8 +282,48 @@ const char INDEX_HTML[] = R"HTML(
   });
 
   speed.addEventListener('change', () => {
-    request('/speed?value=' + encodeURIComponent(speed.value));
+    request('/speed?value=' + encodeURIComponent(speed.value)).catch(() => {});
   });
+
+  function applyObstacleState(isObstacle) {
+    obstacle = isObstacle;
+
+    document.querySelectorAll('button[data-dir="F"], button[data-dir="L"], button[data-dir="R"]')
+      .forEach(btn => btn.disabled = obstacle);
+
+    const sensorBox = document.getElementById('sensor');
+    const message = document.getElementById('sensorMessage');
+
+    if (obstacle) {
+      sensorBox.classList.add('alert');
+      message.textContent = 'OBSTÁCULO: frente/lados bloqueados; somente RÉ.';
+
+      if (activeDir !== 'B' && activeDir !== 'S') {
+        stopMove(false);
+        activeDir = 'S';
+      }
+    } else {
+      sensorBox.classList.remove('alert');
+      message.textContent = 'Área frontal livre';
+    }
+  }
+
+  function refreshStatus() {
+    request('/status')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('distance').textContent =
+          data.distanceCm === null ? '--' : Number(data.distanceCm).toFixed(1);
+
+        speed.value = data.speed;
+        speedValue.textContent = data.speed;
+        applyObstacleState(Boolean(data.obstacle));
+      })
+      .catch(() => {});
+  }
+
+  refreshStatus();
+  setInterval(refreshStatus, 300);
 </script>
 </body>
 </html>
@@ -258,8 +365,27 @@ void stopMotors() {
   currentCommand = 'S';
 }
 
-void executeCommand(char command) {
+bool commandAllowedByObstacle(char command) {
+  if (!obstacleDetected) {
+    return true;
+  }
+
+  // Com obstáculo à frente, apenas ré e stop são permitidos.
+  return command == 'B' || command == 'S';
+}
+
+bool executeCommand(char command) {
   command = toupper(command);
+
+  if (!commandAllowedByObstacle(command)) {
+    stopMotors();
+    Serial.printf(
+      "[ULTRASSOM] Movimento %c bloqueado. Obstáculo a %.1f cm. Use B (ré) ou S (stop).\n",
+      command,
+      lastDistanceCm
+    );
+    return false;
+  }
 
   switch (command) {
     case 'F':
@@ -273,13 +399,13 @@ void executeCommand(char command) {
       break;
 
     case 'L':
-      // Giro sobre o próprio eixo para a esquerda
+      // Giro sobre o próprio eixo para a esquerda.
       setLeftMotor(-motorSpeed);
       setRightMotor(motorSpeed);
       break;
 
     case 'R':
-      // Giro sobre o próprio eixo para a direita
+      // Giro sobre o próprio eixo para a direita.
       setLeftMotor(motorSpeed);
       setRightMotor(-motorSpeed);
       break;
@@ -287,11 +413,11 @@ void executeCommand(char command) {
     case 'S':
       stopMotors();
       Serial.println("[MOVIMENTO] STOP");
-      return;
+      return true;
 
     default:
       Serial.printf("[AVISO] Comando inválido: %c\n", command);
-      return;
+      return false;
   }
 
   currentCommand = command;
@@ -302,6 +428,78 @@ void executeCommand(char command) {
     currentCommand,
     motorSpeed
   );
+
+  return true;
+}
+
+// ============================================================
+// Sensor ultrassônico HC-SR04
+// ============================================================
+
+float readUltrasonicDistanceCm() {
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(ULTRASONIC_TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+
+  unsigned long durationUs = pulseIn(
+    ULTRASONIC_ECHO_PIN,
+    HIGH,
+    ULTRASONIC_TIMEOUT_US
+  );
+
+  if (durationUs == 0) {
+    return -1.0f;
+  }
+
+  return durationUs / 58.0f;
+}
+
+void updateUltrasonicSensor() {
+  unsigned long now = millis();
+
+  if (now - lastUltrasonicReadMs < ULTRASONIC_INTERVAL_MS) {
+    return;
+  }
+
+  lastUltrasonicReadMs = now;
+
+  float distanceCm = readUltrasonicDistanceCm();
+
+  if (distanceCm < 0) {
+    // Sem eco válido: mantém o estado anterior para evitar liberar o robô
+    // por uma leitura isolada inválida.
+    return;
+  }
+
+  lastDistanceCm = distanceCm;
+
+  bool previousObstacleState = obstacleDetected;
+
+  if (!obstacleDetected && distanceCm <= OBSTACLE_STOP_DISTANCE_CM) {
+    obstacleDetected = true;
+  } else if (obstacleDetected && distanceCm >= OBSTACLE_RELEASE_DISTANCE_CM) {
+    obstacleDetected = false;
+  }
+
+  if (!previousObstacleState && obstacleDetected) {
+    Serial.printf(
+      "[ULTRASSOM] Obstáculo detectado a %.1f cm. Parando o robô.\n",
+      distanceCm
+    );
+
+    // Ao detectar um obstáculo, para imediatamente qualquer movimento.
+    // Depois da parada, apenas B (ré) e S (stop) ficam liberados.
+    stopMotors();
+  }
+
+  if (previousObstacleState && !obstacleDetected) {
+    Serial.printf(
+      "[ULTRASSOM] Caminho liberado. Distância: %.1f cm.\n",
+      distanceCm
+    );
+  }
 }
 
 // ============================================================
@@ -364,7 +562,17 @@ void handleMove() {
     return;
   }
 
-  executeCommand(command);
+  bool accepted = executeCommand(command);
+
+  if (!accepted && obstacleDetected) {
+    server.send(
+      423,
+      "text/plain; charset=utf-8",
+      "Obstáculo à frente: somente RÉ ou STOP estão liberados."
+    );
+    return;
+  }
+
   server.send(200, "text/plain", "OK");
 }
 
@@ -394,6 +602,20 @@ void handleStatus() {
   json += motorSpeed;
   json += ",\"clients\":";
   json += WiFi.softAPgetStationNum();
+  json += ",\"obstacle\":";
+  json += obstacleDetected ? "true" : "false";
+  json += ",\"stopDistanceCm\":";
+  json += String(OBSTACLE_STOP_DISTANCE_CM, 1);
+  json += ",\"releaseDistanceCm\":";
+  json += String(OBSTACLE_RELEASE_DISTANCE_CM, 1);
+  json += ",\"distanceCm\":";
+
+  if (lastDistanceCm < 0) {
+    json += "null";
+  } else {
+    json += String(lastDistanceCm, 1);
+  }
+
   json += "}";
 
   server.send(200, "application/json", json);
@@ -427,6 +649,11 @@ void printSerialHelp() {
   Serial.println("  S = parar");
   Serial.println("  + = aumentar velocidade em 15");
   Serial.println("  - = diminuir velocidade em 15");
+  Serial.println();
+  Serial.printf("Ultrassom: para em <= %.1f cm e libera em >= %.1f cm.\n",
+                OBSTACLE_STOP_DISTANCE_CM,
+                OBSTACLE_RELEASE_DISTANCE_CM);
+  Serial.println("Com obstáculo, somente B (ré) e S (stop) são aceitos.");
   Serial.println("============================================");
 }
 
@@ -485,14 +712,18 @@ void setup() {
 
   pinMode(STBY_PIN, OUTPUT);
 
+  pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
+  pinMode(ULTRASONIC_ECHO_PIN, INPUT);
+  digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+
   stopMotors();
 
-  // Habilita o TB6612FNG
+  // Habilita o TB6612FNG.
   digitalWrite(STBY_PIN, HIGH);
 
   // AP + STA:
-  // - STA permite fazer o scan das redes ao redor
-  // - AP cria a rede própria do robô
+  // - STA permite fazer o scan das redes ao redor.
+  // - AP cria a rede própria do robô.
   WiFi.mode(WIFI_AP_STA);
 
   scanWiFiNetworks();
@@ -522,8 +753,9 @@ void setup() {
 void loop() {
   server.handleClient();
   handleSerialCommands();
+  updateUltrasonicSensor();
 
-  // Fail-safe:
+  // Fail-safe de comunicação:
   // Se o celular parar de enviar comandos enquanto o robô estiver andando,
   // o ESP32 para os motores automaticamente.
   if (currentCommand != 'S' &&

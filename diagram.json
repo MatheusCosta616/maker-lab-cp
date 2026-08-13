@@ -6,15 +6,44 @@
     {
       "type": "board-esp32-devkit-c-v4",
       "id": "esp",
-      "top": 110,
+      "top": 185,
       "left": 40,
       "attrs": {}
     },
     {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonic",
+      "top": 20,
+      "left": 285,
+      "attrs": {
+        "distance": "400"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "echoR1",
+      "top": 120,
+      "left": 250,
+      "rotate": 90,
+      "attrs": {
+        "value": "1000"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "echoR2",
+      "top": 120,
+      "left": 365,
+      "rotate": 90,
+      "attrs": {
+        "value": "2000"
+      }
+    },
+    {
       "type": "chip-tb6612fng",
       "id": "driver",
-      "top": 105,
-      "left": 350,
+      "top": 185,
+      "left": 390,
       "attrs": {
         "Vs": "6"
       }
@@ -22,8 +51,8 @@
     {
       "type": "chip-stepper-esc",
       "id": "escLeft",
-      "top": 20,
-      "left": 590,
+      "top": 85,
+      "left": 620,
       "attrs": {
         "Tau": "10",
         "Texp": "-2",
@@ -33,8 +62,8 @@
     {
       "type": "wokwi-stepper-motor",
       "id": "motorLeft",
-      "top": 0,
-      "left": 805,
+      "top": 65,
+      "left": 835,
       "attrs": {
         "size": "17",
         "display": "angle",
@@ -44,8 +73,8 @@
     {
       "type": "chip-stepper-esc",
       "id": "escRight",
-      "top": 305,
-      "left": 590,
+      "top": 365,
+      "left": 620,
       "attrs": {
         "Tau": "10",
         "Texp": "-2",
@@ -55,8 +84,8 @@
     {
       "type": "wokwi-stepper-motor",
       "id": "motorRight",
-      "top": 285,
-      "left": 805,
+      "top": 345,
+      "left": 835,
       "attrs": {
         "size": "17",
         "display": "angle",
@@ -66,16 +95,34 @@
     {
       "type": "wokwi-text",
       "id": "title",
-      "top": -48,
+      "top": -65,
       "left": 25,
       "attrs": {
-        "text": "ROBO 2WD - ESP32 + TB6612FNG + 2 MOTORES"
+        "text": "ROBO 2WD - ESP32 + TB6612FNG + HC-SR04"
+      }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "sensorLabel",
+      "top": -15,
+      "left": 270,
+      "attrs": {
+        "text": "SENSOR ULTRASSONICO FRONTAL"
+      }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "dividerLabel",
+      "top": 95,
+      "left": 240,
+      "attrs": {
+        "text": "DIVISOR ECHO 5V -> 3.3V"
       }
     },
     {
       "type": "wokwi-text",
       "id": "espLabel",
-      "top": 72,
+      "top": 150,
       "left": 50,
       "attrs": {
         "text": "ESP32"
@@ -84,8 +131,8 @@
     {
       "type": "wokwi-text",
       "id": "driverLabel",
-      "top": 68,
-      "left": 335,
+      "top": 150,
+      "left": 375,
       "attrs": {
         "text": "TB6612FNG"
       }
@@ -93,8 +140,8 @@
     {
       "type": "wokwi-text",
       "id": "leftLabel",
-      "top": -18,
-      "left": 785,
+      "top": 47,
+      "left": 815,
       "attrs": {
         "text": "MOTOR ESQUERDO"
       }
@@ -102,8 +149,8 @@
     {
       "type": "wokwi-text",
       "id": "rightLabel",
-      "top": 265,
-      "left": 785,
+      "top": 327,
+      "left": 815,
       "attrs": {
         "text": "MOTOR DIREITO"
       }
@@ -111,10 +158,10 @@
     {
       "type": "wokwi-text",
       "id": "note",
-      "top": 495,
-      "left": 310,
+      "top": 545,
+      "left": 210,
       "attrs": {
-        "text": "No robo real: motores TT DC. No Wokwi: stepper visualiza o giro do motor DC."
+        "text": "No robo real: motores TT DC. Ajuste a distancia do HC-SR04 clicando no sensor."
       }
     }
   ],
@@ -129,6 +176,48 @@
       "esp:RX",
       "$serialMonitor:TX",
       "",
+      []
+    ],
+    [
+      "esp:18",
+      "ultrasonic:TRIG",
+      "orange",
+      []
+    ],
+    [
+      "esp:5V",
+      "ultrasonic:VCC",
+      "red",
+      []
+    ],
+    [
+      "esp:GND.3",
+      "ultrasonic:GND",
+      "black",
+      []
+    ],
+    [
+      "ultrasonic:ECHO",
+      "echoR1:1",
+      "purple",
+      []
+    ],
+    [
+      "echoR1:2",
+      "esp:19",
+      "purple",
+      []
+    ],
+    [
+      "echoR1:2",
+      "echoR2:1",
+      "purple",
+      []
+    ],
+    [
+      "echoR2:2",
+      "esp:GND.3",
+      "black",
       []
     ],
     [

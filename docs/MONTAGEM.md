@@ -1,101 +1,81 @@
-# Montagem
+# Montagem física
 
 ## Base
 
-Dimensão adotada:
+- largura: 200 mm;
+- comprimento: 200 mm;
+- espessura: 3 mm;
+- material sugerido: acrílico, MDF ou PVC expandido.
 
-**200 mm × 200 mm**
-
-Espessura sugerida:
-
-**3 mm**
-
-Material:
-
-- acrílico;
-- MDF fino;
-- PVC expandido;
-- chapa impressa/fabricada em outro material rígido.
-
-## Distribuição sugerida
+## Vista superior sugerida
 
 ```text
-                    FRENTE
-      ┌──────────────────────────────┐
-      │                              │
-      │            CASTER            │
-      │              O               │
-      │                              │
-      │     ESP32       TB6612       │
-      │                              │
- O====│ MOTOR E      MOTOR D         │====O
-RODA  │                              │   RODA
-      │        BATERIA / FONTE       │
-      │                              │
-      └──────────────────────────────┘
-                    TRASEIRA
+                        FRENTE
+       ┌────────────────────────────────┐
+       │         [ HC-SR04 ]            │
+       │                                │
+  O====│ MOTOR E                 MOTOR D│====O
+       │                                │
+       │      ESP32       TB6612        │
+       │                                │
+       │       REG. 5V     BATERIA      │
+       │                                │
+       │             CASTER             │
+       └────────────────────────────────┘
 ```
 
-As rodas podem ficar parcialmente para fora dos 200 mm da placa.
+## HC-SR04
 
-## Ligação ESP32 -> TB6612FNG
+Monte o sensor em um suporte vertical na borda frontal.
 
-### Canal A - motor esquerdo
+Evite colocar:
 
-| ESP32 | TB6612 |
+- acrílico na frente dos transdutores;
+- cabos cruzando a frente do sensor;
+- o sensor apontando para baixo;
+- rodas entrando no cone de medição.
+
+## Ligações do ultrassom
+
+```text
+HC-SR04 VCC  -> 5V
+HC-SR04 TRIG -> GPIO 18
+HC-SR04 ECHO -> 1 kΩ -> GPIO 19
+                         |
+                        2 kΩ
+                         |
+                        GND
+HC-SR04 GND  -> GND
+```
+
+## Ligações do TB6612FNG
+
+| ESP32 | TB6612FNG |
 |---|---|
 | GPIO 25 | AIN1 |
 | GPIO 26 | AIN2 |
 | GPIO 27 | PWMA |
-
-### Canal B - motor direito
-
-| ESP32 | TB6612 |
-|---|---|
 | GPIO 32 | BIN1 |
 | GPIO 33 | BIN2 |
 | GPIO 14 | PWMB |
-
-### Controle do driver
-
-| ESP32 | TB6612 |
-|---|---|
 | GPIO 13 | STBY |
 | 3V3 | VCC |
 | GND | GND |
 
-### Motores
+Motor esquerdo: `AO1/AO2`.
 
-| TB6612 | Destino |
-|---|---|
-| A01 / A02 | Motor esquerdo |
-| B01 / B02 | Motor direito |
-| VM | Positivo da bateria dos motores |
-| GND | Negativo da bateria / terra comum |
+Motor direito: `BO1/BO2`.
 
 ## Alimentação
 
-Não ligue os motores nos pinos 3V3 ou 5V do ESP32.
+```text
+4 x AA
+  |
+  +------------> VM do TB6612FNG
+  |
+  +--> 5V regulado -> ESP32 + HC-SR04
 
-A corrente dos motores deve vir da alimentação de potência ligada ao `VM` do TB6612.
+GND comum entre bateria, regulador, ESP32, TB6612FNG e HC-SR04.
+```
 
-O ESP32 e o driver precisam compartilhar o mesmo GND.
-
-## Se um motor girar invertido
-
-Há duas opções:
-
-1. inverter os dois fios daquele motor no TB6612;
-2. inverter o sentido correspondente no firmware.
-
-Para uma montagem inicial, inverter fisicamente os fios costuma ser mais simples.
-
-## Furos na placa
-
-Além dos furos específicos dos motores, é recomendável criar uma pequena malha de furos M3 para permitir reposicionamento.
-
-Sugestão:
-
-- distância entre furos: 10 ou 20 mm;
-- evitar furar muito próximo às bordas;
-- deixar espaço para abraçadeiras e passagem de fios.
+Não alimente os motores diretamente pelo ESP32.

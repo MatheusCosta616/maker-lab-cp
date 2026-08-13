@@ -1,51 +1,30 @@
 # Controle Wi-Fi pelo celular
 
-O projeto não exige um aplicativo Android/iOS separado.
+O ESP32 cria a própria rede Wi-Fi e hospeda uma página de controle.
 
-O próprio ESP32 hospeda uma página web com os controles do robô.
-
-## Passo a passo
+## Conexão
 
 1. Ligue o robô.
-2. Abra as configurações de Wi-Fi do celular.
-3. Conecte-se à rede:
-
-```text
-Robo-ESP32
-```
-
-4. Digite a senha:
-
-```text
-fiap2026
-```
-
-5. Abra o navegador.
-6. Acesse:
-
-```text
-http://192.168.4.1
-```
+2. No celular, conecte-se a `Robo-ESP32`.
+3. Senha: `fiap2026`.
+4. Abra `http://192.168.4.1`.
 
 ## Interface
 
-A página possui:
+A tela mostra:
 
-```text
-       ▲
-    ◀ STOP ▶
-       ▼
+- distância atual do HC-SR04;
+- aviso de obstáculo;
+- frente;
+- ré;
+- esquerda;
+- direita;
+- stop;
+- controle de velocidade.
 
-Velocidade: 0 ---------------- 255
-```
-
-Os botões funcionam enquanto estão pressionados.
-
-Ao soltar o botão, o navegador envia `STOP`.
+Quando o sensor entra em bloqueio, os botões de frente, esquerda e direita são desabilitados visualmente. A ré continua disponível.
 
 ## API HTTP
-
-Além da interface gráfica, o firmware também possui uma API HTTP simples.
 
 ### Movimento
 
@@ -63,39 +42,24 @@ GET /move?dir=S
 GET /speed?value=180
 ```
 
-Valores aceitos:
-
-```text
-0 a 255
-```
-
 ### Estado
 
 ```text
 GET /status
 ```
 
-Exemplo de resposta:
+Exemplo:
 
 ```json
 {
   "command": "S",
   "speed": 180,
-  "clients": 1
+  "clients": 1,
+  "obstacle": true,
+  "stopDistanceCm": 20.0,
+  "releaseDistanceCm": 25.0,
+  "distanceCm": 14.8
 }
 ```
 
-## Aplicativo futuro
-
-Se posteriormente for necessário criar um aplicativo mobile de verdade, ele pode reutilizar exatamente os mesmos endpoints HTTP.
-
-Por exemplo, um app em:
-
-- Flutter;
-- React Native;
-- Android nativo;
-- MIT App Inventor;
-
-poderá simplesmente chamar `/move`, `/speed` e `/status`.
-
-Portanto, a arquitetura atual não precisa ser descartada caso a disciplina passe a exigir um app.
+Quando há obstáculo, chamadas de `F`, `L` ou `R` retornam HTTP `423` e o robô permanece parado.

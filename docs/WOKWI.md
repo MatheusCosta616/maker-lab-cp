@@ -1,93 +1,52 @@
 # Teste no Wokwi
 
-## O que esta versão simula
+## Componentes simulados
 
-O diagrama usa componentes visuais de verdade para a eletrônica do projeto:
+O `diagram.json` utiliza:
 
-- ESP32 DevKit C V4;
-- TB6612FNG como **Custom Chip**;
-- dois conversores `stepper-esc`;
-- dois motores visuais `wokwi-stepper-motor`.
+- ESP32 DevKitC V4;
+- HC-SR04 nativo do Wokwi;
+- 2 resistores para o divisor do ECHO;
+- TB6612FNG como custom chip;
+- 2 chips `stepper-esc`;
+- 2 motores stepper usados apenas como visualização do giro dos motores TT DC.
 
-O Wokwi não possui atualmente um motor DC TT genérico nativo. Por isso, cada motor TT do robô real é representado por um `wokwi-stepper-motor`. O `stepper-esc` converte os sinais do TB6612FNG em movimento visual, permitindo ver sentido e velocidade do motor na simulação.
+## Como executar
 
-## Dependências do diagram.json
+1. Crie/abra um projeto ESP32 no Wokwi.
+2. Substitua `sketch.ino` pelo arquivo do repositório.
+3. Substitua `diagram.json` pelo arquivo do repositório.
+4. Inicie a simulação.
+5. Aguarde as dependências dos custom chips.
+6. Abra o Serial Monitor.
 
-```json
-"dependencies": {
-  "chip-tb6612fng": "github:drf5n/Wokwi-Chip-TB6612FNG@1.0.0",
-  "chip-stepper-esc": "github:drf5n/Wokwi-Chip-stepper-esc@1.0.0"
-}
-```
-
-Não é necessário copiar manualmente os arquivos `.chip.c` e `.chip.json` quando o projeto é aberto no Wokwi.com: as dependências são carregadas pelo próprio simulador.
-
-## Fluxo simulado
-
-```text
-ESP32
-  |
-  | GPIO / PWM
-  v
-TB6612FNG
-  |
-  +-------- canal A --------> stepper-esc ---> motor esquerdo
-  |
-  +-------- canal B --------> stepper-esc ---> motor direito
-```
-
-## Pinos
-
-| ESP32 | TB6612FNG |
-|---|---|
-| GPIO 25 | AIN1 |
-| GPIO 26 | AIN2 |
-| GPIO 27 | PWMA |
-| GPIO 32 | BIN1 |
-| GPIO 33 | BIN2 |
-| GPIO 14 | PWMB |
-| GPIO 13 | nSTBY |
-| 3V3 | VCC |
-| 5V | VMOT (representação da alimentação no simulador) |
-| GND | GND/GND1/GND2 |
-
-## Teste pelo Serial Monitor
-
-Inicie a simulação e envie:
+## Comandos Serial
 
 ```text
 F = frente
 B = ré
 L = esquerda
 R = direita
-S = parar
-+ = aumentar velocidade
-- = diminuir velocidade
+S = stop
++ = aumenta a velocidade
+- = diminui a velocidade
 ```
 
-### Importante sobre o fail-safe
+## Testar o ultrassom
 
-O firmware para o robô depois de aproximadamente 900 ms sem receber outro comando de movimento.
+O sensor começa em 400 cm.
 
-Então, para observar o motor girando continuamente pelo Serial Monitor, envie `F` ou outro comando novamente antes do timeout. No controle Web isso acontece automaticamente enquanto o botão estiver pressionado.
+1. Envie `F` algumas vezes para manter o robô em movimento.
+2. Clique no HC-SR04.
+3. Ajuste a distância para `15 cm`.
+4. O firmware imprime a detecção e para os motores.
+5. Tente `F`, `L` e `R`: devem ser bloqueados.
+6. Envie `B`: a ré deve funcionar.
+7. Ajuste o sensor para `30 cm`.
+8. O bloqueio é removido.
 
-## Controle pelo celular
+O Wokwi permite mudar a distância simulada do HC-SR04 durante a execução.
 
-No ESP32 físico:
+## Observação sobre os motores
 
-1. Conecte o celular ao Wi-Fi `Robo-ESP32`.
-2. Senha: `fiap2026`.
-3. Abra `http://192.168.4.1`.
-4. Use os botões direcionais e o controle de velocidade.
-
-No Wokwi, a parte elétrica/mecânica pode ser validada diretamente no diagrama e pelo Serial Monitor. O acesso externo ao servidor HTTP simulado depende da configuração de rede/gateway utilizada no Wokwi.
-
-## Hardware real
-
-Na montagem física, retire da cadeia os dois `stepper-esc` e os motores stepper. Eles existem apenas para visualização no Wokwi.
-
-A ligação real é:
-
-```text
-ESP32 -> TB6612FNG -> 2 motores TT DC
-```
+O Wokwi não possui um motor TT DC nativo. Por isso, o TB6612FNG custom controla dois `stepper-esc`, que transformam a saída da ponte H em movimento visual dos steppers.
