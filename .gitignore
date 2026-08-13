@@ -1,0 +1,20 @@
+# Arduino / IDE
+*.bin
+*.elf
+*.hex
+*.map
+*.bak
+*.tmp
+
+# VS Code
+.vscode/
+
+# PlatformIO
+.pio/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos locais
+*.log
